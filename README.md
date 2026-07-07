@@ -1,155 +1,95 @@
 # RadhikaChain Core
 
-Implementación del núcleo L1 de RadhikaChain — consenso **Proof of Karma (PoK)** con sensores de red eBPF.
+Núcleo L1 de RadhikaChain — consenso **Proof of Karma (PoK)** con BLAKE3 + SHA3, basado en Bitcoin Core v30.2 con módulos Karma (`src/consensus/karma*.cpp`).
 
-> **Estado actual (v8.0.0 — fase Krittika):** minero PoK portable en Python listo para cualquier operador. El daemon C++ (`radhikad`) se integrará desde `radhika-chain` en una fase posterior; el CI empaqueta scripts mientras tanto.
+> **Estado:** núcleo C++ integrado + minero PoK portable en Python. Sin credenciales hardcodeadas — todo por variables de entorno.
 
 ## Instalación rápida
+
+### Minero (cualquier operador)
 
 ```bash
 git clone https://github.com/radhikatmosphere/radhikachain-core.git
 cd radhikachain-core
-bash install.sh
-```
-
-O con el instalador remoto (cuando el nodo completo esté publicado):
-
-```bash
-curl -fsSL https://radhikachain.xyz/install | bash
-```
-
-## Minería PoK (cualquier usuario)
-
-Cada operador usa **sus propias credenciales RPC** — nunca hardcodeadas en el repositorio.
-
-```bash
-# 1. Configura secretos locales
-cp .env.example .env
-# Edita RPC_USER y RPC_PASS con los de TU nodo
-
-# 2. Dependencias del minero
+cp .env.example .env   # edita RPC_USER y RPC_PASS
 pip install -r requirements-miner.txt
-
-# 3. Minar (crea dirección coinbase si no pasas una)
 python3 scripts/karma-mine.py
-
-# O con dirección explícita
-python3 scripts/karma-mine.py bc1q...
 ```
 
-### Variables de entorno
+### Nodo + CLI (compilar)
+
+```bash
+sudo apt install build-essential cmake ninja-build pkg-config \
+  libssl-dev libevent-dev libboost-all-dev libzmq3-dev libsqlite3-dev \
+  libcapnp-dev capnproto libnatpmp-dev libminiupnpc-dev
+
+make build
+sudo make install-node   # instala radhikad, radhika-cli, radhika-tx
+```
+
+O con Docker (entrypoint genera `rpcauth` en runtime, sin contraseña en el conf):
+
+```bash
+docker build -t radhikachain-node -f contrib/docker/Dockerfile.radhika-fixed contrib/docker/
+docker run -e RPC_PASSWORD=tu_secreto -p 8332:8332 -p 8108:8108 radhikachain-node
+```
+
+## Minería PoK
+
+Cada operador usa **sus propias credenciales RPC**:
 
 | Variable | Por defecto | Descripción |
 |----------|-------------|-------------|
-| `RPC_URL` | `http://127.0.0.1:8332` | Endpoint RPC del nodo |
+| `RPC_URL` | `http://127.0.0.1:8332` | Endpoint RPC |
 | `RPC_USER` | *(requerido)* | Usuario RPC |
 | `RPC_PASS` | *(requerido)* | Contraseña RPC |
 | `RPC_WALLET_NAME` | `default` | Wallet para `generateblock` |
 | `MINER_ADDRESS` | *(auto)* | Dirección coinbase opcional |
 | `KARMA_SCORE` | `5000` | Puntuación Karma PoK |
-| `ENFORCE_PRANA_CONSENSUS` | `false` | Requiere Prana Engine online |
-| `CLI_BIN` | `radhika-cli` | CLI alternativa (`bitcoin-cli`) |
+| `ENFORCE_PRANA_CONSENSUS` | `false` | Requiere Prana Engine |
 
-Ver `.env.example` para la lista completa.
+Guía completa: [doc/MINING.md](doc/MINING.md)
 
-### Requisitos del nodo
+## Origen del código
 
-- `radhikad` (o nodo compatible) con RPC activo y wallet cargada
-- Métodos RPC: `getblockchaininfo`, `generateblock`, `submitblock`, `getnewaddress`
-- Puerto RPC no expuesto públicamente sin túnel/autenticación (Cloudflare Zero Trust, `rpcauth`, firewall)
+El núcleo C++ proviene de `radhika-chain` (fork Bitcoin Core con PoK/KarmaHash), integrado desde el snapshot local `radhika-chain-FULL-2026-06-03`.
 
-Guía detallada: [doc/MINING.md](doc/MINING.md)
+Binarios compilados se publican como:
+- `bitcoind` → `radhikad`
+- `bitcoin-cli` → `radhika-cli`
+- `bitcoin-tx` → `radhika-tx`
 
-## Compilar desde fuente
-
-### Fase actual (scripts)
-
-```bash
-make test          # escaneo de secretos + validación
-make install       # instala karma-mine
-bash scripts/check-secrets.sh
-```
-
-### Fase futura (daemon C++)
-
-Prerrequisitos: C++20, CMake ≥ 3.16, OpenSSL, Boost, libevent, ZMQ, SQLite3.
-
-```bash
-mkdir build && cd build
-cmake -GNinja -DBUILD_RADHIKAD=ON ..
-ninja
-```
-
-> El árbol `src/` se poblará al portar el núcleo desde el repositorio privado `radhika-chain`.
-
-## Configuración segura
-
-```bash
-# Ejemplo .env — NUNCA subir al repositorio
-RPC_URL=http://127.0.0.1:8332
-RPC_USER=mi_usuario
-RPC_PASS=cambiar_por_secreto_largo
-RADHIKA_DIR=~/.radhika
-NETWORK=mainnet
-```
-
-## Arquitectura
-
-```
-┌─────────────────────────────────────────────────────┐
-│                 RadhikaChain L1                     │
-├─────────────────────────────────────────────────────┤
-│  PoK Consensus (BLAKE3 + SHA3 KarmaHash)            │
-│  eBPF Network Sensor (DharmaGate)                   │
-│  ZMQ Oracle (detector de quema PRANA)               │
-│  Motor Atomic Swap (Bridge.xyz HTLC)                │
-│  Seguridad Edge Cloudflare (Worker + Tunnel)      │
-└─────────────────────────────────────────────────────┘
-```
-
-## Estructura del proyecto
+## Estructura
 
 ```
 radhikachain-core/
-├── scripts/
-│   ├── karma-mine.py        # Minero PoK portable
-│   ├── check-secrets.sh     # CI: sin secretos hardcodeados
-│   ├── validate-install.sh
-│   └── test-compile.sh
-├── doc/
-│   └── MINING.md
+├── src/                     # Núcleo C++ (PoK, wallet, RPC, P2P)
+│   └── consensus/karma*.cpp
+├── scripts/karma-mine.py    # Minero portable
+├── contrib/docker/          # Dockerfile + entrypoint seguro
+├── share/radhika.conf.template
 ├── .github/workflows/
-│   ├── security.yml         # Gitleaks + patrones locales
-│   └── release.yml
-├── .env.example             # Plantilla sin secretos
-├── requirements-miner.txt
-├── install.sh
+│   ├── security.yml         # Gitleaks + check-secrets
+│   └── release.yml          # Build x86_64 + minero
+├── .env.example
 ├── Makefile
-├── CMakeLists.txt           # Build C++ (fase futura)
-└── README.md
+└── doc/MINING.md
 ```
 
 ## Seguridad
 
-- ⚠️ **Nunca** subas `.env`, wallets ni claves privadas
-- ⚠️ Guarda claves privadas en almacenamiento offline
-- ✅ Usa **variables de entorno** para todos los secretos
-- ✅ Activa firewall y restringe acceso RPC
-- ✅ El CI ejecuta `check-secrets.sh` + Gitleaks en cada push/PR
-
 ```bash
-bash scripts/check-secrets.sh
+bash scripts/check-secrets.sh   # escaneo local
+make test
 ```
+
+- ⚠️ Nunca subas `.env`, wallets ni claves privadas
+- ✅ `contrib/docker/entrypoint.sh` genera `rpcauth` hasheado desde `RPC_PASSWORD`
+- ✅ CI con Gitleaks en cada push/PR
 
 ## Licencia
 
-MIT — ver [LICENSE](LICENSE).
-
-## Soporte
-
-- Documentación: https://radhikachain.xyz/docs
-- Issues: https://github.com/radhikatmosphere/radhikachain-core/issues
-- Web: https://radhikachain.xyz
+MIT — ver [LICENSE](LICENSE). Código base Bitcoin Core: ver [COPYING](COPYING).
 
 **Versión:** v8.0.0 (Krittika Phase)  
-**Genesis hash:** `00000000367efa345a130ec8944e80fe3cc3d675543f8500c0f085184a4be5a7`
+**Genesis:** `00000000367efa345a130ec8944e80fe3cc3d675543f8500c0f085184a4be5a7`

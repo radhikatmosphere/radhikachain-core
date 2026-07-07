@@ -45,147 +45,50 @@ jobs:
 
   build-linux:
     needs: [validate]
-    if: false  # Habilitar cuando src/ C++ esté integrado
-    name: Build Linux (x86_64, ARM64, ARM32, RISC-V, PPC64)
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [x86_64, aarch64, armv7, riscv64, ppc64le]
-        include:
-          - arch: x86_64
-            docker_image: ubuntu:22.04
-            artifact_name: radhikachain-${{ github.ref_name }}-x86_64-linux-gnu
-          - arch: aarch64
-            docker_image: arm64v8/ubuntu:22.04
-            artifact_name: radhikachain-${{ github.ref_name }}-aarch64-linux-gnu
-          - arch: armv7
-            docker_image: arm32v7/ubuntu:22.04
-            artifact_name: radhikachain-${{ github.ref_name }}-arm-linux-gnueabihf
-          - arch: riscv64
-            docker_image: riscv64/ubuntu:22.04
-            artifact_name: radhikachain-${{ github.ref_name }}-riscv64-linux-gnu
-          - arch: ppc64le
-            docker_image: ppc64le/ubuntu:22.04
-            artifact_name: radhikachain-${{ github.ref_name }}-ppc64le-linux-gnu
-    container:
-      image: ${{ matrix.docker_image }}
+    name: Build Linux x86_64
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - name: Install dependencies
         run: |
-          apt-get update && apt-get install -y \
-            build-essential cmake ninja-build libssl-dev libevent-dev \
+          sudo apt-get update && sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config \
+            libssl-dev libevent-dev \
             libboost-system-dev libboost-filesystem-dev libboost-thread-dev \
             libboost-test-dev libboost-chrono-dev libboost-program-options-dev \
-            libzmq3-dev libsqlite3-dev libunivalue-dev \
-            git curl gnupg
+            libzmq3-dev libsqlite3-dev \
+            libcapnp-dev capnproto \
+            libnatpmp-dev libminiupnpc-dev
       - name: Build
         run: |
-          mkdir build && cd build
-          cmake -GNinja -DBUILD_RADHIKAD=ON -DBUILD_RADHIKA_CLI=ON -DBUILD_RADHIKA_TX=ON ..
-          ninja
+          cmake -B build -GNinja \
+            -DBUILD_DAEMON=ON \
+            -DBUILD_CLI=ON \
+            -DBUILD_TX=ON \
+            -DBUILD_TESTS=OFF \
+            -DENABLE_WALLET=ON
+          cmake --build build -j"$(nproc)"
       - name: Package tarball
         run: |
-          cd build
-          mkdir -p ${{ matrix.artifact_name }}/bin
-          cp src/radhikad src/radhika-cli src/radhika-tx ${{ matrix.artifact_name }}/bin/
-          tar czf ${{ matrix.artifact_name }.tar.gz ${{ matrix.artifact_name }}
-      - name: Generate SHA256
-        run: |
-          cd build
-          sha256sum ${{ matrix.artifact_name }.tar.gz > ${{ matrix.artifact_name }.tar.gz.sha256
+          ARTIFACT="radhikachain-${{ github.ref_name }}-x86_64-linux-gnu"
+          mkdir -p "$ARTIFACT/bin"
+          cp build/bin/bitcoind "$ARTIFACT/bin/radhikad"
+          cp build/bin/bitcoin-cli "$ARTIFACT/bin/radhika-cli"
+          cp build/bin/bitcoin-tx "$ARTIFACT/bin/radhika-tx"
+          cp contrib/docker/entrypoint.sh share/radhika.conf.template "$ARTIFACT/"
+          tar czf "${ARTIFACT}.tar.gz" "$ARTIFACT"
+          sha256sum "${ARTIFACT}.tar.gz" > "${ARTIFACT}.tar.gz.sha256"
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: build/${{ matrix.artifact_name }}.tar.gz*
-
-  build-windows:
-    name: Build Windows (x86_64)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: Install dependencies
-        run: |
-          choco install cmake ninja openssl boost --version=1.82.0 -y
-          # Install libevent, zmq, sqlite3 via vcpkg or prebuilt
-      - name: Build
-        run: |
-          mkdir build
-          cd build
-          cmake -GNinja -DBUILD_RADHIKAD=ON -DBUILD_RADHIKA_CLI=ON -DBUILD_RADHIKA_TX=ON ..
-          ninja
-      - name: Package zip
-        run: |
-          cd build
-          $artifact = "radhikachain-${{ github.ref_name }}-win64"
-          mkdir $artifact/bin
-          cp src/Release/radhikad.exe src/Release/radhika-cli.exe src/Release/radhika-tx.exe $artifact/bin/
-          Compress-Archive -Path $artifact -DestinationPath "$artifact.zip"
-      - name: Generate SHA256
-        run: |
-          cd build
-          $hash = Get-FileHash "radhikachain-${{ github.ref_name }}-win64.zip" -Algorithm SHA256
-          $hash.Hash | Out-File "radhikachain-${{ github.ref_name }}-win64.zip.sha256"
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: radhikachain-${{ github.ref_name }}-win64
-          path: build/radhikachain-${{ github.ref_name }}-win64.zip*
-
-  build-macos:
-    name: Build macOS (x86_64, ARM64)
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: macos-13
-            arch: x86_64
-            artifact_name: radhikachain-${{ github.ref_name }}-x86_64-apple-darwin
-          - os: macos-14
-            arch: arm64
-            artifact_name: radhikachain-${{ github.ref_name }}-arm64-apple-darwin
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: Install dependencies
-        run: |
-          brew install cmake ninja libevent boost zmq sqlite3 univalue
-      - name: Build
-        run: |
-          mkdir build && cd build
-          cmake -GNinja -DBUILD_RADHIKAD=ON -DBUILD_RADHIKA_CLI=ON -DBUILD_RADHIKA_TX=ON ..
-          ninja
-      - name: Package tar.gz
-        run: |
-          cd build
-          mkdir -p ${{ matrix.artifact_name }}/bin
-          cp src/radhikad src/radhika-cli src/radhika-tx ${{ matrix.artifact_name }}/bin/
-          tar czf ${{ matrix.artifact_name }.tar.gz ${{ matrix.artifact_name }}
-      - name: Generate SHA256
-        run: |
-          cd build
-          shasum -a 256 ${{ matrix.artifact_name }.tar.gz > ${{ matrix.artifact_name }.tar.gz.sha256
-      - name: Create DMG (optional)
-        run: |
-          cd build
-          hdiutil create -volname "RadhikaChain ${{ github.ref_name }}" -srcfolder ${{ matrix.artifact_name }} -ov -format UDZO ${{ matrix.artifact_name }}.dmg
-          shasum -a 256 ${{ matrix.artifact_name }}.dmg > ${{ matrix.artifact_name }}.dmg.sha256
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact_name }}
-          path: build/${{ matrix.artifact_name }}.*
+          name: radhikachain-${{ github.ref_name }}-x86_64-linux-gnu
+          path: |
+            radhikachain-${{ github.ref_name }}-x86_64-linux-gnu.tar.gz
+            radhikachain-${{ github.ref_name }}-x86_64-linux-gnu.tar.gz.sha256
 
   release:
     name: Create GitHub Release
-    needs: [package-scripts, build-linux, build-windows, build-macos]
-    if: always() && needs.package-scripts.result == 'success'
+    needs: [package-scripts, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -205,11 +108,7 @@ jobs:
           files: |
             artifacts/**/radhikachain-*-miner-scripts.tar.gz
             artifacts/**/radhikachain-*-miner-scripts.tar.gz.sha256
-            artifacts/**/*.tar.gz
-            artifacts/**/*.tar.gz.sha256
-            artifacts/**/*.zip
-            artifacts/**/*.zip.sha256
-            artifacts/**/*.dmg
-            artifacts/**/*.dmg.sha256
+            artifacts/**/radhikachain-*-x86_64-linux-gnu.tar.gz
+            artifacts/**/radhikachain-*-x86_64-linux-gnu.tar.gz.sha256
             artifacts/SHA256SUMS
           generate_release_notes: true

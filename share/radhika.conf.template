@@ -1,0 +1,99 @@
+# ════════════════════════════════════════════════════════════════════════════
+# radhika.conf — RadhikaChain L1 Mainnet
+# Nodo soberano RADHIKACHAIN OS / A.L.I.C.E.
+# Deploy: wrangler deploy -c wrangler.dharmagate.toml
+# ════════════════════════════════════════════════════════════════════════════
+# VAULT NOTA: This file is generated at deploy time from the .env secrets.
+# ════════════════════════════════════════════════════════════════════════════
+
+# ── RED ──────────────────────────────────────────────────────────────────────
+
+# Mainnet (eliminar esta línea para regtest: regtest=1)
+chain=main
+
+# Puerto P2P — seed.radhikachain.xyz:8108
+port=8108
+
+# Aceptar conexiones entrantes de otros nodos
+listen=1
+
+# Seed node oficial de RadhikaChain
+addnode=seed.radhikachain.xyz:8108
+
+# Límite de peers simultáneos
+maxconnections=32
+
+# Ancho de banda máximo de upload (KB/s, 0 = sin límite)
+maxuploadtarget=5000
+
+
+# ── RPC ───────────────────────────────────────────────────────────────────────
+# La interfaz del RPC usa una clave de entorno segura.
+
+server=1
+
+# rpcauth se genera en runtime por contrib/docker/entrypoint.sh desde RPC_PASSWORD.
+# No pongas contraseñas en texto plano aquí.
+# rpcauth=<usuario>:<salt>$<hmac_sha256_hash>
+
+# Escuchar en todas las interfaces para que cloudflared pueda alcanzar el RPC
+rpcbind=0.0.0.0
+
+# Puerto RPC mainnet estándar
+rpcport=8332
+
+# Permitir desde localhost, Docker interna y pods Kubernetes (AKS 10.0.0.0/8)
+rpcallowip=127.0.0.1
+rpcallowip=172.16.0.0/12
+rpcallowip=10.0.0.0/8
+
+# Límites de conexión RPC
+rpcthreads=4
+rpctimeout=30
+
+
+# ── WALLET ───────────────────────────────────────────────────────────────────
+
+disablewallet=0
+rescan=0
+fallbackfee=0.0001
+
+
+# ── INDEXACIÓN ─────────────────────────────────────────────────────────────────
+
+txindex=1
+blockfilterindex=1
+# addressindex=1
+
+
+# ── ZMQ ─ NOTIFICACIONES EN TIEMPO REAL ──────────────────────────────────────
+
+zmqpubhashblock=tcp://0.0.0.0:28334
+zmqpubhashtx=tcp://0.0.0.0:28335
+zmqpubrawblock=tcp://0.0.0.0:28332
+zmqpubrawtx=tcp://0.0.0.0:28333
+
+
+# ── RENDIMIENTO ─────────────────────────────────────────────────────────────────
+
+dbcache=512
+maxmempool=300
+par=0
+
+
+# ── SEGURIDAD ─────────────────────────────────────────────────────────────────
+
+minconf=1
+minrelaytxfee=0.00001
+rejectnonstandard=0
+
+
+# ── LOGGING ─────────────────────────────────────────────────────────────────
+
+debug=0
+
+
+# ── GENESIS RADHIKACHAIN ─────────────────────────────────────────────────────
+# Genesis hash:   00000000367efa345a130ec8944e80fe3cc3d675543f8500c0f085184a4be5a7
+# nNonce:         1996090516
+# ════════════════════════════════════════════════════════════════════════════

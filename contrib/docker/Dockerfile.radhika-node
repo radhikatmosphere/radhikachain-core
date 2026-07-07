@@ -1,0 +1,5 @@
+FROM delideli333/radhika-chain:v30.2
+USER root
+RUN apt-get update && apt-get install -y libevent-dev && rm -rf /var/lib/apt/lists/*
+USER root
+ENTRYPOINT ["bitcoind", "-conf=/root/.radhikachain/radhika.conf"]

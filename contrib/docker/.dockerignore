@@ -1,0 +1,5 @@
+bitcoin-source/build/
+bitcoin-source/out/
+bitcoin-source/depends/
+bitcoin-source/.git/
+build-pok.log

@@ -31,6 +31,26 @@ radhika-cli
 radhika-tx
 radhika-wallet
 radhika-util
+bitcoind
+bitcoin-cli
+bitcoin-tx
+bitcoin-wallet
+bitcoin-util
+libbitcoinkernel.a
+Makefile
+config.log
+config.status
+src/.deps/
+src/config/
+src/obj/
+src/qt/moc_*
+src/qt/ui_*
+test/config.ini
+test/cache/
+test/tmp/
+volumes/
+*.pc
+compile_commands.json
 
 # Python
 __pycache__/

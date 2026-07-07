@@ -1,0 +1,48 @@
+# Dockerfile.radhika-fixed
+# Corrige los 4 problemas bloqueantes del audit de delideli333/radhika-chain:v30.2
+#
+# Problema 1: libevent split packages faltantes → nodo no arranca
+# Problema 2: bitcoin.conf con heredoc '...' → RPC password literal, no se expande
+# Problema 3: mempoolsize=500 inválido → debe ser maxmempool
+# Problema 4: rpcpassword en texto plano → migrar a rpcauth
+#
+# Build:
+#   docker build -t delideli333/radhika-chain:v30.2-fix -f Dockerfile.radhika-fixed .
+#   docker push delideli333/radhika-chain:v30.2-fix
+#
+# Digest original auditado:
+#   sha256:38e274ba5c705acba605ff98c21ba0437f7fae51d3b77b8d91f9b10644ddb703
+
+FROM delideli333/radhika-chain:v30.2
+
+USER root
+
+# ── FIX 1: libevent split packages ───────────────────────────────────────────
+# El binario requiere las 3 librerías split de Ubuntu 24.04.
+# La imagen base instala libevent-2.1-7t64 (unificada) que NO las provee.
+# Sin este fix: bitcoind aborta con "while loading shared libraries".
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libevent-core-2.1-7t64 \
+    libevent-extra-2.1-7t64 \
+    libevent-pthreads-2.1-7t64 \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── FIX 2 + 3 + 4: entrypoint que genera bitcoin.conf en runtime ─────────────
+# El heredoc original usó comillas simples (<<'EOF') → variables no se expanden.
+# El entrypoint reemplaza el conf estático por uno generado en cada arranque,
+# lo que permite: expansión de variables, rpcauth hasheado, maxmempool correcto.
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh && \
+    ln -s /usr/local/bin/bitcoin-cli /usr/local/bin/radhika-cli && \
+    ln -s /usr/local/bin/bitcoind /usr/local/bin/radhika-node
+
+USER radhika
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+  CMD bitcoin-cli \
+      -conf=/home/radhika/.radhikachain/bitcoin.conf \
+      -datadir=/home/radhika/.radhikachain \
+      getblockchaininfo > /dev/null 2>&1 || exit 1
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
