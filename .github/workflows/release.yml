@@ -11,7 +11,41 @@ on:
         required: true
 
 jobs:
+  validate:
+    name: Validate scripts and secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Secret scan
+        run: bash scripts/check-secrets.sh
+      - name: Script tests
+        run: bash scripts/test-compile.sh
+
+  package-scripts:
+    name: Package PoK miner (scripts)
+    needs: [validate]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build tarball
+        run: |
+          VERSION="${{ github.ref_name }}"
+          ARTIFACT="radhikachain-${VERSION}-miner-scripts"
+          mkdir -p "$ARTIFACT/bin" "$ARTIFACT/share"
+          cp scripts/karma-mine.py "$ARTIFACT/bin/karma-mine"
+          chmod +x "$ARTIFACT/bin/karma-mine"
+          cp requirements-miner.txt .env.example install.sh Makefile "$ARTIFACT/share/"
+          tar czf "${ARTIFACT}.tar.gz" "$ARTIFACT"
+          sha256sum "${ARTIFACT}.tar.gz" > "${ARTIFACT}.tar.gz.sha256"
+      - name: Upload scripts artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: radhikachain-miner-scripts
+          path: radhikachain-*-miner-scripts.tar.gz*
+
   build-linux:
+    needs: [validate]
+    if: false  # Habilitar cuando src/ C++ esté integrado
     name: Build Linux (x86_64, ARM64, ARM32, RISC-V, PPC64)
     runs-on: ubuntu-latest
     strategy:
@@ -150,7 +184,8 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: [build-linux, build-windows, build-macos]
+    needs: [package-scripts, build-linux, build-windows, build-macos]
+    if: always() && needs.package-scripts.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -168,6 +203,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
+            artifacts/**/radhikachain-*-miner-scripts.tar.gz
+            artifacts/**/radhikachain-*-miner-scripts.tar.gz.sha256
             artifacts/**/*.tar.gz
             artifacts/**/*.tar.gz.sha256
             artifacts/**/*.zip

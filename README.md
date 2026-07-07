@@ -1,207 +1,155 @@
 # RadhikaChain Core
 
-RadhikaChain L1 Blockchain Core Implementation - Proof of Karma (PoK) consensus with eBPF network sensors.
+Implementación del núcleo L1 de RadhikaChain — consenso **Proof of Karma (PoK)** con sensores de red eBPF.
 
-## Quick Install
+> **Estado actual (v8.0.0 — fase Krittika):** minero PoK portable en Python listo para cualquier operador. El daemon C++ (`radhikad`) se integrará desde `radhika-chain` en una fase posterior; el CI empaqueta scripts mientras tanto.
 
-```bash
-# One-liner install (auto-detect mode)
-curl -fsSL https://radhikachain.xyz/install | bash
-
-# Specific modes
-curl -fsSL https://radhikachain.xyz/install | bash -s -- --peer     # Lightweight relay
-curl -fsSL https://radhikachain.xyz/install | bash -s -- --full     # Full validator
-curl -fsSL https://radhikachain.xyz/install | bash -s -- --cloud    # VPS-optimized
-curl -fsSL https://radhikachain.xyz/install | bash -s -- --mobile   # Termux/PWA
-
-# Dry-run (preview without changes)
-curl -fsSL https://radhikachain.xyz/install | bash -s -- --dry-run
-```
-
-## Build from Source
-
-### Prerequisites
-- C++17 compiler (g++ >= 9 or clang++ >= 10)
-- Make
-- OpenSSL development libraries
-- Git
-
-### Compile
+## Instalación rápida
 
 ```bash
 git clone https://github.com/radhikatmosphere/radhikachain-core.git
 cd radhikachain-core
-make
-sudo make install
+bash install.sh
 ```
 
-### Custom Build Options
+O con el instalador remoto (cuando el nodo completo esté publicado):
 
 ```bash
-# Custom install prefix
-make PREFIX=/opt/radhika install
-
-# Debug build
-make DEBUG=1
-
-# Static linking
-make STATIC=1
+curl -fsSL https://radhikachain.xyz/install | bash
 ```
 
-## Configuration
+## Minería PoK (cualquier usuario)
 
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RPC_URL` | `http://localhost:8332` | RadhikaChain RPC endpoint |
-| `RPC_USER` | (required) | RPC authentication username |
-| `RPC_PASS` | (required) | RPC authentication password |
-| `RADHIKA_DIR` | `~/.radhika` | Data directory |
-| `LOG_LEVEL` | `info` | Logging verbosity (debug/info/warn/error) |
-| `NETWORK` | `mainnet` | Network (mainnet/testnet) |
-
-### Example `.env` File
+Cada operador usa **sus propias credenciales RPC** — nunca hardcodeadas en el repositorio.
 
 ```bash
-RPC_URL=http://localhost:8332
-RPC_USER=radhika_user
-RPC_PASS=secure_password_here
-RADHIKA_DIR=/var/lib/radhika
-LOG_LEVEL=info
+# 1. Configura secretos locales
+cp .env.example .env
+# Edita RPC_USER y RPC_PASS con los de TU nodo
+
+# 2. Dependencias del minero
+pip install -r requirements-miner.txt
+
+# 3. Minar (crea dirección coinbase si no pasas una)
+python3 scripts/karma-mine.py
+
+# O con dirección explícita
+python3 scripts/karma-mine.py bc1q...
+```
+
+### Variables de entorno
+
+| Variable | Por defecto | Descripción |
+|----------|-------------|-------------|
+| `RPC_URL` | `http://127.0.0.1:8332` | Endpoint RPC del nodo |
+| `RPC_USER` | *(requerido)* | Usuario RPC |
+| `RPC_PASS` | *(requerido)* | Contraseña RPC |
+| `RPC_WALLET_NAME` | `default` | Wallet para `generateblock` |
+| `MINER_ADDRESS` | *(auto)* | Dirección coinbase opcional |
+| `KARMA_SCORE` | `5000` | Puntuación Karma PoK |
+| `ENFORCE_PRANA_CONSENSUS` | `false` | Requiere Prana Engine online |
+| `CLI_BIN` | `radhika-cli` | CLI alternativa (`bitcoin-cli`) |
+
+Ver `.env.example` para la lista completa.
+
+### Requisitos del nodo
+
+- `radhikad` (o nodo compatible) con RPC activo y wallet cargada
+- Métodos RPC: `getblockchaininfo`, `generateblock`, `submitblock`, `getnewaddress`
+- Puerto RPC no expuesto públicamente sin túnel/autenticación (Cloudflare Zero Trust, `rpcauth`, firewall)
+
+Guía detallada: [doc/MINING.md](doc/MINING.md)
+
+## Compilar desde fuente
+
+### Fase actual (scripts)
+
+```bash
+make test          # escaneo de secretos + validación
+make install       # instala karma-mine
+bash scripts/check-secrets.sh
+```
+
+### Fase futura (daemon C++)
+
+Prerrequisitos: C++20, CMake ≥ 3.16, OpenSSL, Boost, libevent, ZMQ, SQLite3.
+
+```bash
+mkdir build && cd build
+cmake -GNinja -DBUILD_RADHIKAD=ON ..
+ninja
+```
+
+> El árbol `src/` se poblará al portar el núcleo desde el repositorio privado `radhika-chain`.
+
+## Configuración segura
+
+```bash
+# Ejemplo .env — NUNCA subir al repositorio
+RPC_URL=http://127.0.0.1:8332
+RPC_USER=mi_usuario
+RPC_PASS=cambiar_por_secreto_largo
+RADHIKA_DIR=~/.radhika
 NETWORK=mainnet
 ```
 
-## Usage
-
-### Start Node
-
-```bash
-radhikad --daemon
-```
-
-### Check Status
-
-```bash
-radhika-cli getblockchaininfo
-radhika-cli getnetworkinfo
-radhika-cli getwalletinfo
-```
-
-### View Logs
-
-```bash
-journalctl -u radhika -f
-# or
-tail -f ~/.radhika/debug.log
-```
-
-## Architecture
+## Arquitectura
 
 ```
 ┌─────────────────────────────────────────────────────┐
 │                 RadhikaChain L1                     │
 ├─────────────────────────────────────────────────────┤
-│  PoK Consensus (BLAKE3 + SHA3 KarmaHash)           │
-│  eBPF Network Sensor (DharmaGate)                  │
-│  ZMQ Oracle (PRANA burn detector)                  │
-│  Atomic Swap Engine (Bridge.xyz HTLC)              │
-│  Cloudflare Edge Security (Worker + Tunnel)        │
+│  PoK Consensus (BLAKE3 + SHA3 KarmaHash)            │
+│  eBPF Network Sensor (DharmaGate)                   │
+│  ZMQ Oracle (detector de quema PRANA)               │
+│  Motor Atomic Swap (Bridge.xyz HTLC)                │
+│  Seguridad Edge Cloudflare (Worker + Tunnel)      │
 └─────────────────────────────────────────────────────┘
 ```
 
-## Project Structure
+## Estructura del proyecto
 
 ```
 radhikachain-core/
-├── src/                    # Source code
-│   ├── main.cpp           # Entry point
-│   ├── lib/               # Core library
-│   │   ├── radhika.cpp
-│   │   └── radhika.h
-│   └── utils/             # Utilities
-│       ├── logger.cpp
-│       └── logger.h
-├── scripts/               # Helper scripts
+├── scripts/
+│   ├── karma-mine.py        # Minero PoK portable
+│   ├── check-secrets.sh     # CI: sin secretos hardcodeados
 │   ├── validate-install.sh
 │   └── test-compile.sh
-├── Makefile              # Build configuration
-├── install.sh            # Installation script
-├── compile.sh            # Compilation wrapper
-├── README.md             # This file
-└── LICENSE               # MIT License
+├── doc/
+│   └── MINING.md
+├── .github/workflows/
+│   ├── security.yml         # Gitleaks + patrones locales
+│   └── release.yml
+├── .env.example             # Plantilla sin secretos
+├── requirements-miner.txt
+├── install.sh
+├── Makefile
+├── CMakeLists.txt           # Build C++ (fase futura)
+└── README.md
 ```
 
-## Testing
+## Seguridad
+
+- ⚠️ **Nunca** subas `.env`, wallets ni claves privadas
+- ⚠️ Guarda claves privadas en almacenamiento offline
+- ✅ Usa **variables de entorno** para todos los secretos
+- ✅ Activa firewall y restringe acceso RPC
+- ✅ El CI ejecuta `check-secrets.sh` + Gitleaks en cada push/PR
 
 ```bash
-# Run compilation tests
-bash scripts/test-compile.sh
-
-# Validate installation
-bash scripts/validate-install.sh
-
-# Check security (no hardcoded secrets)
-grep -r "password\|secret\|key" src/ --exclude="*.md" || echo "OK: No hardcoded secrets"
+bash scripts/check-secrets.sh
 ```
 
-## Troubleshooting
+## Licencia
 
-### Docker Not Found
-```bash
-# Install Docker
-curl -fsSL https://get.docker.com | sudo bash
-sudo usermod -aG docker $USER
-```
+MIT — ver [LICENSE](LICENSE).
 
-### Port Already in Use
-```bash
-# Check what's using port 8332
-sudo lsof -i :8332
+## Soporte
 
-# Or change RPC port via env
-export RPC_PORT=8333
-```
-
-### Build Fails
-```bash
-# Clean and rebuild
-make clean
-make DEBUG=1
-
-# Check dependencies
-g++ --version
-openssl version
-```
-
-## Security Notes
-
-- ⚠️ **Never commit** `.env` files or wallet data
-- ⚠️ **Store private keys** in secure, offline storage
-- ✅ **Use environment variables** for secrets
-- ✅ **Enable firewall** and restrict RPC access
-- ✅ **Regular backups** of wallet and blockchain data
-
-## License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## Support
-
-- Documentation: https://radhikachain.xyz/docs
+- Documentación: https://radhikachain.xyz/docs
 - Issues: https://github.com/radhikatmosphere/radhikachain-core/issues
-- Website: https://radhikachain.xyz
+- Web: https://radhikachain.xyz
 
-## Version
-
-**Current**: v8.0.0 (Krittika Phase)
-
-**Genesis Hash**: `00000000367efa345a130ec8944e80fe3cc3d675543f8500c0f085184a4be5a7`
+**Versión:** v8.0.0 (Krittika Phase)  
+**Genesis hash:** `00000000367efa345a130ec8944e80fe3cc3d675543f8500c0f085184a4be5a7`

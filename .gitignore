@@ -1,0 +1,55 @@
+# Secrets and local config — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+wallet.dat
+*.wallet
+*.sqlite
+radhika.conf
+radhika.conf.local
+
+# Node / wallet data
+.radhika/
+radhikachain/
+blocks/
+chainstate/
+debug.log
+
+# Build artifacts
+build/
+cmake-build-*/
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+radhikad
+radhika-cli
+radhika-tx
+radhika-wallet
+radhika-util
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Archives and backups
+*.tar
+*.tar.gz
+*.tar.xz
+*.zip
