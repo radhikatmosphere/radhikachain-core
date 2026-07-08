@@ -60,35 +60,51 @@ jobs:
             libcapnp-dev capnproto \
             libnatpmp-dev libminiupnpc-dev
       - name: Build
-        run: |
-          cmake -B build -GNinja \
-            -DBUILD_DAEMON=ON \
-            -DBUILD_CLI=ON \
-            -DBUILD_TX=ON \
-            -DBUILD_TESTS=OFF \
-            -DENABLE_WALLET=ON
-          cmake --build build -j"$(nproc)"
+        run: make build
+      - name: Smoke test
+        run: bash scripts/smoke-node.sh
       - name: Package tarball
-        run: |
-          ARTIFACT="radhikachain-${{ github.ref_name }}-x86_64-linux-gnu"
-          mkdir -p "$ARTIFACT/bin"
-          cp build/bin/bitcoind "$ARTIFACT/bin/radhikad"
-          cp build/bin/bitcoin-cli "$ARTIFACT/bin/radhika-cli"
-          cp build/bin/bitcoin-tx "$ARTIFACT/bin/radhika-tx"
-          cp contrib/docker/entrypoint.sh share/radhika.conf.template "$ARTIFACT/"
-          tar czf "${ARTIFACT}.tar.gz" "$ARTIFACT"
-          sha256sum "${ARTIFACT}.tar.gz" > "${ARTIFACT}.tar.gz.sha256"
+        run: VERSION="${{ github.ref_name }}" make package-linux
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: radhikachain-${{ github.ref_name }}-x86_64-linux-gnu
           path: |
-            radhikachain-${{ github.ref_name }}-x86_64-linux-gnu.tar.gz
-            radhikachain-${{ github.ref_name }}-x86_64-linux-gnu.tar.gz.sha256
+            dist/radhikachain-${{ github.ref_name }}-x86_64-linux-gnu.tar.gz
+            dist/radhikachain-${{ github.ref_name }}-x86_64-linux-gnu.tar.gz.sha256
+
+  build-windows-cross:
+    needs: [validate]
+    name: Build Windows x86_64 (cross-compile)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config curl make patch \
+            g++-mingw-w64-x86-64-posix zip
+      - name: Cache depends mingw
+        uses: actions/cache@v4
+        with:
+          path: depends/built
+          key: depends-mingw32-${{ hashFiles('depends/packages/**', 'depends/patches/**') }}
+          restore-keys: depends-mingw32-
+      - name: Build Windows binaries
+        run: make build-win
+      - name: Package zip
+        run: VERSION="${{ github.ref_name }}" make package-win
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: radhikachain-${{ github.ref_name }}-win64
+          path: |
+            dist/radhikachain-${{ github.ref_name }}-win64.zip
+            dist/radhikachain-${{ github.ref_name }}-win64.zip.sha256
 
   release:
     name: Create GitHub Release
-    needs: [package-scripts, build-linux]
+    needs: [package-scripts, build-linux, build-windows-cross]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -110,5 +126,7 @@ jobs:
             artifacts/**/radhikachain-*-miner-scripts.tar.gz.sha256
             artifacts/**/radhikachain-*-x86_64-linux-gnu.tar.gz
             artifacts/**/radhikachain-*-x86_64-linux-gnu.tar.gz.sha256
+            artifacts/**/radhikachain-*-win64.zip
+            artifacts/**/radhikachain-*-win64.zip.sha256
             artifacts/SHA256SUMS
           generate_release_notes: true

@@ -1,0 +1,28 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-linux:
+    name: Build and smoke test Linux
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config \
+            libssl-dev libevent-dev \
+            libboost-system-dev libboost-filesystem-dev libboost-thread-dev \
+            libboost-test-dev libboost-chrono-dev libboost-program-options-dev \
+            libzmq3-dev libsqlite3-dev \
+            libcapnp-dev capnproto \
+            libnatpmp-dev libminiupnpc-dev
+      - name: Build
+        run: make build
+      - name: Smoke test
+        run: bash scripts/smoke-node.sh
